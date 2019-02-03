@@ -466,19 +466,27 @@ namespace mssql
 		const auto max_obj_len = get_max_object_len(p);
 		reserve_var_binary_array(max_obj_len, array_len);
 		auto itr = _storage->charvec_ptr->data();
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		for (uint32_t i = 0; i < array_len; ++i)
 		{
 			_indvec[i] = SQL_NULL_DATA;
-			const auto elem = arr->Get(i);
-			if (!elem->IsNull())
-			{
-				const auto o = elem->ToObject();
-				const auto ptr = node::Buffer::Data(o);
-				const auto obj_len = node::Buffer::Length(o);
-				_indvec[i] = obj_len;
-				memcpy(&*itr, ptr, obj_len);
+			auto maybe_elem = arr->Get(context, i);
+			Local<Value> elem;
+			if (maybe_elem.ToLocal(&elem)) {
+				if (!elem->IsNull())
+				{
+					auto maybe_object = elem->ToObject(context);
+					Local<Object> local_object;
+					if (maybe_object.ToLocal(&local_object)) {	
+						const auto ptr = node::Buffer::Data(local_object);
+						const auto obj_len = node::Buffer::Length(local_object);
+						_indvec[i] = obj_len;
+						memcpy(&*itr, ptr, obj_len);
+					}
+				}
+				itr += max_obj_len;
 			}
-			itr += max_obj_len;
 		}
 	}
 
@@ -646,8 +654,10 @@ namespace mssql
 				{
 					auto maybe = elem->ToInt32(context);
 					Local<Int32> local;
-					vec[i] = elem->Int32Value();
-					_indvec[i] = 0;
+					if (maybe.ToLocal(&local)) {
+						vec[i] = local->Value();
+						_indvec[i] = 0;
+					}
 				}
 			}
 		}
@@ -672,10 +682,16 @@ namespace mssql
 		reserve_uint32(1);
 		auto& vec = *_storage->uint32vec_ptr;
 		_indvec[0] = SQL_NULL_DATA;
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		if (!p->IsNull())
 		{
-			vec[0] = p->Uint32Value();
-			_indvec[0] = 0;
+			auto maybe = p->ToUint32(context);
+			Local<Uint32> local;
+			if (maybe.ToLocal(&local)) {
+				vec[0] = local->Value();
+				_indvec[0] = 0;	
+			}	
 		}
 	}
 
@@ -685,14 +701,23 @@ namespace mssql
 		const auto len = arr->Length();
 		reserve_uint32(len);
 		auto& vec = *_storage->uint32vec_ptr;
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		for (uint32_t i = 0; i < len; ++i)
 		{
 			_indvec[i] = SQL_NULL_DATA;
-			const auto elem = arr->Get(i);
-			if (!elem->IsNull())
-			{
-				vec[i] = elem->Uint32Value();
-				_indvec[i] = 0;
+			auto maybe_elem = arr->Get(context, i);
+			Local<Value> elem;
+			if (maybe_elem.ToLocal(&elem)) {
+				if (!elem->IsNull())
+				{
+					auto maybe = elem->ToUint32(context);
+					Local<Uint32> local;
+					if (maybe.ToLocal(&local)) {
+						vec[i] = local->Value();
+						_indvec[i] = 0;
+					}
+				}
 			}
 		}
 	}
@@ -718,14 +743,20 @@ namespace mssql
 		_indvec[0] = SQL_NULL_DATA;
 		if (!p->IsNull())
 		{
+			nodeTypeFactory fact;
+			auto context = fact.isolate->GetCurrentContext();
 			auto date_object = Handle<Date>::Cast<Value>(p);
 			assert(!date_object.IsEmpty());
 			// dates in JS are stored internally as ms count from Jan 1, 1970
-			const auto d = date_object->NumberValue();
-			TimestampColumn sql_date(-1, d);
-			auto& dt = (*_storage->datevec_ptr)[0];
-			sql_date.ToDateStruct(dt);
-			_indvec[0] = buffer_len;
+			auto maybe = date_object->ToNumber(context);
+			Local<Number> local;
+			if (maybe.ToLocal(&local)) {
+				const auto d = local->Value();
+				TimestampColumn sql_date(-1, d);
+				auto& dt = (*_storage->datevec_ptr)[0];
+				sql_date.ToDateStruct(dt);
+				_indvec[0] = buffer_len;
+			}
 		}
 	}
 
@@ -753,14 +784,19 @@ namespace mssql
 		_indvec[0] = SQL_NULL_DATA;
 		if (!p->IsNull())
 		{
+			nodeTypeFactory fact;
+			auto context = fact.isolate->GetCurrentContext();
 			auto date_object = Handle<Date>::Cast<Value>(p);
 			assert(!date_object.IsEmpty());
 			// dates in JS are stored internally as ms count from Jan 1, 1970
-			const auto d = date_object->NumberValue();
-			TimestampColumn sql_date(-1, d);
-			auto& time2 = (*_storage->time2vec_ptr)[0];
-			sql_date.ToTime2Struct(time2);
-			_indvec[0] = buffer_len;
+			auto maybe = date_object->ToNumber(context);
+			Local<Number> local;
+			if (maybe.ToLocal(&local)) {
+				TimestampColumn sql_date(-1, local->Value());
+				auto& time2 = (*_storage->time2vec_ptr)[0];
+				sql_date.ToTime2Struct(time2);
+				_indvec[0] = buffer_len;
+			}
 		}
 	}
 
@@ -786,16 +822,21 @@ namespace mssql
 		reserve_time_stamp(1);
 		// Since JS dates have no timezone context, all dates are assumed to be UTC
 		_indvec[0] = SQL_NULL_DATA;
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		if (!p->IsNull())
 		{
 			auto date_object = Handle<Date>::Cast<Value>(p);
 			assert(!date_object.IsEmpty());
 			// dates in JS are stored internally as ms count from Jan 1, 1970
-			const auto d = date_object->NumberValue();
-			TimestampColumn sql_date(-1, d);
-			auto& timestamp = (*_storage->timestampvec_ptr)[0];
-			sql_date.to_timestamp_struct(timestamp);
-			_indvec[0] = buffer_len;
+			auto maybe = date_object->ToNumber(context);
+			Local<Number> local;
+			if (maybe.ToLocal(&local)) {
+				TimestampColumn sql_date(-1, local->Value());
+				auto& timestamp = (*_storage->timestampvec_ptr)[0];
+				sql_date.to_timestamp_struct(timestamp);
+				_indvec[0] = buffer_len;
+			}
 		}
 	}
 
@@ -820,16 +861,21 @@ namespace mssql
 		reserve_time_stamp_offset(1);
 		// Since JS dates have no timezone context, all dates are assumed to be UTC
 		_indvec[0] = SQL_NULL_DATA;
+		nodeTypeFactory fact;		
+		auto context = fact.isolate->GetCurrentContext();
 		if (!p->IsNull())
-		{
+		{	
 			auto date_object = Handle<Date>::Cast<Value>(p);
-			assert(!date_object.IsEmpty());
+			assert(!date_object.IsEmpty());			
 			// dates in JS are stored internally as ms count from Jan 1, 1970
-			const auto d = date_object->NumberValue();
-			auto& ts = (*_storage->timestampoffsetvec_ptr)[0];
-			TimestampColumn sql_date(-1, d, 0, offset);
-			sql_date.to_timestamp_offset(ts);
-			_indvec[0] = buffer_len;
+			auto maybe = date_object->ToNumber(context);
+			Local<Number> local;
+			if (maybe.ToLocal(&local)) {				
+				auto& ts = (*_storage->timestampoffsetvec_ptr)[0];
+				TimestampColumn sql_date(-1, local->Value(), 0, offset);
+				sql_date.to_timestamp_offset(ts);
+				_indvec[0] = buffer_len;
+			}
 		}
 	}
 
@@ -856,6 +902,8 @@ namespace mssql
 		reserve_time_stamp_offset(len);
 		auto& vec = *_storage->timestampoffsetvec_ptr;
 		buffer_len = sizeof(SQL_SS_TIMESTAMPOFFSET_STRUCT);
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		for (uint32_t i = 0; i < len; ++i)
 		{
 			_indvec[i] = SQL_NULL_DATA;
@@ -865,8 +913,12 @@ namespace mssql
 				_indvec[i] = sizeof(SQL_SS_TIMESTAMPOFFSET_STRUCT);
 				const auto d = Handle<Date>::Cast<Value>(elem);
 				auto& ts = vec[i];
-				TimestampColumn sql_date(-1, d->NumberValue());
-				sql_date.to_timestamp_offset(ts);
+				auto maybe = d->ToNumber(context);
+				Local<Number> local;
+				if (maybe.ToLocal(&local)) {
+					TimestampColumn sql_date(-1, local->Value());
+					sql_date.to_timestamp_offset(ts);
+				}
 			}
 		}
 	}
@@ -976,15 +1028,24 @@ namespace mssql
 		auto arr = Local<Array>::Cast(p);
 		const auto len = arr->Length();
 		reserve_double(len);
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		auto& vec = *_storage->doublevec_ptr;
 		for (uint32_t i = 0; i < len; ++i)
 		{
 			_indvec[i] = SQL_NULL_DATA;
-			const auto elem = arr->Get(i);
-			if (!elem->IsNull())
-			{
-				vec[i] = elem->NumberValue();
-				_indvec[i] = 0;
+			auto maybe_elem = arr->Get(context, i);
+			Local<Value> elem;
+			if (maybe_elem.ToLocal(&elem)) {
+				if (!elem->IsNull())
+				{
+					auto maybe_number = elem->ToNumber(context);
+					Local<Number> local_number;
+					if (maybe_number.ToLocal(&local_number)) {
+						vec[i] = local_number->Value();
+						_indvec[i] = 0;
+					}
+				}
 			}
 		}
 	}
@@ -993,33 +1054,48 @@ namespace mssql
 	{
 		// numbers can be either integers or doubles.  We attempt to determine which it is through a simple
 		// cast and equality check
-		const auto d = p->NumberValue();
-		if (d == floor(d) &&
-			d >= numeric_limits<int64_t>::min() &&
-			d <= numeric_limits<int64_t>::max())
-		{
-			bind_integer(p);
-		}
-		else
-		{
-			bind_double(p);
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
+		auto maybe = p->ToNumber(context);
+		Local<Number> local;
+		if (maybe.ToLocal(&local)) {
+			const auto d = local->Value();
+			if (d == floor(d) &&
+				d >= numeric_limits<int64_t>::min() &&
+				d <= numeric_limits<int64_t>::max())
+			{
+				bind_integer(p);
+			}
+			else
+			{
+				bind_double(p);
+			}
 		}
 	}
 
 	void BoundDatum::bind_number_array(const Local<Value>& pp)
 	{
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		auto arr = Local<Array>::Cast(pp);
-		const auto p = arr->Get(0);
-		const auto d = p->NumberValue();
-		if (d == floor(d) &&
-			d >= numeric_limits<int64_t>::min() &&
-			d <= numeric_limits<int64_t>::max())
-		{
-			bind_integer_array(pp);
-		}
-		else
-		{
-			bind_double_array(pp);
+		auto maybe_elem = arr->Get(context, 0);
+		Local<Value> p;
+		if (maybe_elem.ToLocal(&p)) {
+			auto maybe = p->ToNumber(context);
+			Local<Number> local;
+			if (maybe.ToLocal(&local)) {
+				auto d = local->Value();
+				if (d == floor(d) &&
+					d >= numeric_limits<int64_t>::min() &&
+					d <= numeric_limits<int64_t>::max())
+				{
+					bind_integer_array(pp);
+				}
+				else
+				{
+					bind_double_array(pp);
+				}
+			}
 		}
 	}
 
