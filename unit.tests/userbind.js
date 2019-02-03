@@ -122,6 +122,22 @@ suite('userbind', function () {
     assert.deepEqual(res, expected)
   }
 
+  test('user bind BigInt', function (testDone) {
+    var params = {
+      query: 'declare @v bigint = ?; select @v as v',
+      min: -9007199254740991,
+      max: 9007199254740991,
+      setter: function (v) {
+        return sql.BigInt(v)
+      }
+    }
+    testUserBind(params, function (err, res) {
+      assert.ifError(err)
+      compare(params, res)
+      testDone()
+    })
+  })
+
   test('user bind DateTime2 to sql type datetime2(7) - with scale set to illegal value, should error', function (testDone) {
     var now = new Date()
     var params = {
@@ -570,22 +586,6 @@ suite('userbind', function () {
       max: true,
       setter: function (v) {
         return sql.Bit(v)
-      }
-    }
-    testUserBind(params, function (err, res) {
-      assert.ifError(err)
-      compare(params, res)
-      testDone()
-    })
-  })
-
-  test('user bind BigInt', function (testDone) {
-    var params = {
-      query: 'declare @v bigint = ?; select @v as v',
-      min: -9007199254740991,
-      max: 9007199254740991,
-      setter: function (v) {
-        return sql.BigInt(v)
       }
     }
     testUserBind(params, function (err, res) {

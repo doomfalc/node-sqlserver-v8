@@ -129,6 +129,8 @@ namespace mssql
 	public:
 		void Decode(v8::Local<v8::Value> p)
 		{
+			nodeTypeFactory fact;
+			auto context = fact.isolate->GetCurrentContext();
 			if (p->IsNull()) {
 				++nullCount;
 			}
@@ -143,22 +145,35 @@ namespace mssql
 			}
 			else if (p->IsUint32()) {
 				++uint32Count;
-			}
-			else if (p->IsNumber()) {
-				double d = p->NumberValue();
-				if (_isnan(d)) ++nanCount;
-				else if (!_finite(d)) ++infiniteCount;
-				if (d == floor(d) &&
-					d >= std::numeric_limits<int32_t>::min() &&
-					d <= std::numeric_limits<int32_t>::max()) {
-					++int32Count;
-				}
-				else if (d == floor(d) &&
-					d >= std::numeric_limits<int64_t>::min() &&
-					d <= std::numeric_limits<int64_t>::max()) {
+			} else if (p->IsBigInt())
+			{
+				MaybeLocal<BigInt> maybe = p->ToBigInt(context);
+				Local<BigInt> local;
+				if (maybe.ToLocal(&local))
+				{
 					++int64Count;
 				}
-				else ++numberCount;
+			}
+			else if (p->IsNumber()) {
+				MaybeLocal<Number> maybe = p->ToNumber(context);
+				Local<Number> local;
+				if (maybe.ToLocal(&local))
+				{
+					auto d = local->Value();
+					if (_isnan(d)) ++nanCount;
+					else if (!_finite(d)) ++infiniteCount;
+					if (d == floor(d) &&
+						d >= std::numeric_limits<int32_t>::min() &&
+						d <= std::numeric_limits<int32_t>::max()) {
+						++int32Count;
+					}
+					else if (d == floor(d) &&
+						d >= std::numeric_limits<int64_t>::min() &&
+						d <= std::numeric_limits<int64_t>::max()) {
+						++int64Count;
+					}
+					else ++numberCount;
+				}
 			}
 			else if (p->IsDate()) {
 				++dateCount;
