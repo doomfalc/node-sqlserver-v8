@@ -49,7 +49,7 @@ namespace mssql
 			_timeout = getint32(query_object, "query_timeout");	
 			_polling = getbool(query_object, "query_polling"); 
 			_query_tz_adjustment = getint32(query_object, "query_tz_adjustment");
-			_id = query_id->NumberValue();
+			_id = getint32(query_id); // getint64(query_id); //  query_id->NumberValue();
 		}
 
 	private:
@@ -98,6 +98,22 @@ namespace mssql
 				if (maybe.ToLocal(&local))
 				{
 					return local->Int64Value();
+				}
+			}
+			return 0;
+		}
+
+		int32_t getint32(Handle<Number> l)
+		{
+			nodeTypeFactory fact;
+			auto context = fact.isolate->GetCurrentContext();
+			if (!l->IsNull())
+			{
+				auto maybe = l->ToInt32(context);
+				Local<Int32> local;
+				if (maybe.ToLocal(&local))
+				{
+					return local->Value();
 				}
 			}
 			return 0;

@@ -29,13 +29,15 @@ namespace mssql
 		wstring result;
 		const auto buffer_length = 256;
 		uint16_t buffer[buffer_length];
+		nodeTypeFactory fact;
+		auto context = fact.isolate->GetCurrentContext();
 		const auto length = input->Length();
 		result.reserve(length);
 		auto read = 0;
 		while (read < length)
 		{
 			const auto toread = min(buffer_length, length - read);
-			const auto actual = input->Write(buffer, read, toread);
+			const auto actual = input->Write(fact.isolate, buffer, read, toread);
 			result.append(reinterpret_cast<const wchar_t*>(buffer), actual);
 			read += actual;
 		}
